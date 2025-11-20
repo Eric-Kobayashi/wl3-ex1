@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wl3-ex1"
+version = "0.1.0"
+description = "YouTube NLP analysis CLI using Pydantic AI, Ollama/OpenAI, yt-dlp, and SQLite."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "Eric", email = "example@example.com" }
+]
+dependencies = [
+    "pydantic-ai>=1.20.0",
+    "python-dotenv>=1.2.1",
+    "rich>=14.2.0",
+    "yt-dlp>=2025.11.12",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+dev-dependencies = []
+
+
