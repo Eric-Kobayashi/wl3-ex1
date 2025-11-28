@@ -75,12 +75,12 @@ def _extract_videos_from_entries(entries: list, videos: List[ChannelVideo]) -> N
         )
 
 
-def list_channel_videos(channel_url: str, max_videos: int = 100) -> List[ChannelVideo]:
+def list_channel_videos(channel_url: str, max_videos: int = 10) -> List[ChannelVideo]:
     """
     Return basic metadata for videos in a channel.
     
     Uses yt-dlp to extract videos from the channel. By default, extracts the
-    most recent 100 videos. Set max_videos to None to get all videos (may take
+    most recent 10 videos. Set max_videos to None to get all videos (may take
     a long time for channels with many videos).
     
     If the channel URL is a handle (e.g., @channelname), it will automatically
@@ -88,7 +88,7 @@ def list_channel_videos(channel_url: str, max_videos: int = 100) -> List[Channel
     
     Args:
         channel_url: URL of the YouTube channel
-        max_videos: Maximum number of videos to extract (default: 100)
+        max_videos: Maximum number of videos to extract (default: 10)
     """
     # Convert channel handle to videos URL if needed
     if channel_url.startswith("https://www.youtube.com/@") and "/videos" not in channel_url:
@@ -98,7 +98,11 @@ def list_channel_videos(channel_url: str, max_videos: int = 100) -> List[Channel
         "ignoreerrors": True,
         "quiet": True,
         "skip_download": True,
-        "extract_flat": False,  # Get full metadata
+        # Use extract_flat=True to avoid SABR streaming format extraction warnings
+        # This gets basic metadata (id, title, url) without extracting video formats
+        # Note: upload_date will be None with extract_flat=True, but this avoids
+        # the "missing url" warnings about web_safari/web client formats
+        "extract_flat": True,
         "no_warnings": False,
     }
     

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 import tempfile
+import time
+import random
 
 import yt_dlp
 
@@ -68,18 +70,40 @@ def fetch_transcript_for_video(url: str) -> TranscriptResult:
             "outtmpl": str(tmpdir_path / "%(id)s.%(ext)s"),
         }
 
-        def _try_download(opts, is_auto: bool) -> TranscriptResult:
-            try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    ydl.extract_info(url, download=True)
-                vtt_files = list(tmpdir_path.glob("*.vtt"))
-                if not vtt_files:
+        def _try_download(opts, is_auto: bool, max_retries: int = 3) -> TranscriptResult:
+            """
+            Try to download transcript with retry logic for rate limiting.
+            
+            Handles HTTP 429 (Too Many Requests) with exponential backoff.
+            """
+            for attempt in range(max_retries):
+                try:
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        ydl.extract_info(url, download=True)
+                    vtt_files = list(tmpdir_path.glob("*.vtt"))
+                    if not vtt_files:
+                        return TranscriptResult(text=None, language=None, is_auto_generated=is_auto)
+                    text = _parse_vtt_to_text(vtt_files[0])
+                    lang = "en"
+                    return TranscriptResult(text=text, language=lang, is_auto_generated=is_auto)
+                except yt_dlp.utils.DownloadError as e:
+                    error_msg = str(e)
+                    # Check if it's a 429 rate limit error
+                    if "429" in error_msg or "Too Many Requests" in error_msg:
+                        if attempt < max_retries - 1:
+                            # Exponential backoff: 2^attempt seconds, with jitter
+                            wait_time = (2 ** attempt) + random.uniform(0, 1)
+                            time.sleep(wait_time)
+                            continue
+                        # If we've exhausted retries, return None
+                        return TranscriptResult(text=None, language=None, is_auto_generated=is_auto)
+                    # For other errors, return None immediately
                     return TranscriptResult(text=None, language=None, is_auto_generated=is_auto)
-                text = _parse_vtt_to_text(vtt_files[0])
-                lang = "en"
-                return TranscriptResult(text=text, language=lang, is_auto_generated=is_auto)
-            except Exception:
-                return TranscriptResult(text=None, language=None, is_auto_generated=is_auto)
+                except Exception:
+                    # For any other exception, return None
+                    return TranscriptResult(text=None, language=None, is_auto_generated=is_auto)
+            
+            return TranscriptResult(text=None, language=None, is_auto_generated=is_auto)
 
         manual = _try_download(base_opts, is_auto=False)
         if manual.text:
@@ -101,8 +125,19 @@ def extract_channel_videos_and_transcripts(
     """
     Given a list of videos for a channel, ensure they are present in the DB
     and that their transcript status is recorded.
+    
+    Includes rate limiting with delays between requests to avoid hitting
+    YouTube's rate limits (HTTP 429 errors).
     """
-    for video in videos:
+    from rich.console import Console
+    
+    console = Console()
+    total = len(videos)
+    processed = 0
+    transcripts_found = 0
+    transcripts_missing = 0
+    
+    for idx, video in enumerate(videos, 1):
         video_id = db.upsert_video(
             conn=conn,
             youtube_id=video.youtube_id,
@@ -112,8 +147,17 @@ def extract_channel_videos_and_transcripts(
         )
 
         if db.video_has_transcript(conn, video_id):
+            processed += 1
             continue
 
+        # Add delay between requests to avoid rate limiting
+        # Random delay between 1-3 seconds to avoid predictable patterns
+        if idx > 1:  # Don't delay before the first request
+            delay = random.uniform(1.0, 3.0)
+            time.sleep(delay)
+
+        console.print(f"[dim]Processing video {idx}/{total}: {video.title[:50]}...[/dim]")
+        
         result = fetch_transcript_for_video(video.url)
         if result.text:
             db.store_transcript(
@@ -128,6 +172,7 @@ def extract_channel_videos_and_transcripts(
                 has_transcript=True,
                 language=result.language,
             )
+            transcripts_found += 1
         else:
             db.mark_transcript_status(
                 conn=conn,
@@ -135,5 +180,13 @@ def extract_channel_videos_and_transcripts(
                 has_transcript=False,
                 language=None,
             )
+            transcripts_missing += 1
+        
+        processed += 1
+    
+    console.print(
+        f"[green]Processed {processed}/{total} videos. "
+        f"Transcripts found: {transcripts_found}, Missing: {transcripts_missing}[/green]"
+    )
 
 

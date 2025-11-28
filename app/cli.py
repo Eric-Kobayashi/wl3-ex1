@@ -36,12 +36,12 @@ def cmd_extract(_: argparse.Namespace) -> None:
     Extract phase: list channel videos, download transcripts when available,
     and record transcript status in the local SQLite database.
     
-    By default, extracts the most recent 100 videos. Use --max-videos to change this.
+    By default, extracts the most recent 10 videos. Use --max-videos to change this.
     """
     settings = _load_settings_or_exit()
     console.print(f"[bold]Extracting videos for channel:[/bold] {settings.youtube_channel_url}")
 
-    videos = list_channel_videos(settings.youtube_channel_url, max_videos=100)
+    videos = list_channel_videos(settings.youtube_channel_url, max_videos=10)
     console.print(f"Discovered {len(videos)} videos on the channel.")
 
     with open_db(settings) as conn:

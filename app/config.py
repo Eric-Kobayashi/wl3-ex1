@@ -48,7 +48,7 @@ class Settings:
     youtube_channel_url: str
     llm_provider: str = "ollama"
     ollama_model: str = "llama3.1"
-    ollama_base_url: str = "http://localhost:11434"
+    ollama_base_url: str = "http://localhost:11434/v1"  # Ollama OpenAI-compatible API requires /v1
     openai_model: str = "gpt-4o-mini"
     openai_api_key: str | None = None
     database_path: Path = PROJECT_ROOT / "youtube_nlp.db"
@@ -58,15 +58,21 @@ class Settings:
         load_env()
         youtube_channel_url = os.getenv("YOUTUBE_CHANNEL_URL", "").strip()
 
-        # Set OLLAMA_BASE_URL if not already set (required by pydantic-ai)
+        # Set OLLAMA_BASE_URL early (required by pydantic-ai for Ollama provider)
+        # Ollama's OpenAI-compatible API requires /v1 in the base URL
+        default_ollama_url = "http://localhost:11434/v1"
+        ollama_base_url = os.getenv("OLLAMA_BASE_URL", default_ollama_url).strip() or default_ollama_url
+        # Ensure /v1 is in the URL if not already present
+        if "/v1" not in ollama_base_url:
+            ollama_base_url = ollama_base_url.rstrip("/") + "/v1"
         if "OLLAMA_BASE_URL" not in os.environ:
-            os.environ["OLLAMA_BASE_URL"] = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            os.environ["OLLAMA_BASE_URL"] = ollama_base_url
         
         return cls(
             youtube_channel_url=youtube_channel_url,
             llm_provider=os.getenv("LLM_PROVIDER", "ollama").strip() or "ollama",
             ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1").strip() or "llama3.1",
-            ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip() or "http://localhost:11434",
+            ollama_base_url=ollama_base_url,
             openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini",
             openai_api_key=os.getenv("OPENAI_API_KEY"),
             database_path=Path(

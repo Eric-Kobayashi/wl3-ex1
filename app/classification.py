@@ -4,6 +4,7 @@ from __future__ import annotations
 Transcript classification into fixed categories using Pydantic AI.
 """
 
+import asyncio
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -50,9 +51,9 @@ Respond with a single category and a short rationale.
 """
 
 
-def classify_unclassified_transcripts(settings: Settings, conn) -> int:
+async def _classify_unclassified_transcripts_async(settings: Settings, conn) -> int:
     """
-    Run the classifier over any transcripts that do not have a saved classification.
+    Async helper to run the classifier over any transcripts that do not have a saved classification.
     """
     agent = build_agent(settings, ClassificationResult, system_prompt=SYSTEM_PROMPT)
     model_name = describe_model(settings)
@@ -73,8 +74,8 @@ def classify_unclassified_transcripts(settings: Settings, conn) -> int:
             f"Transcript:\n{transcript_text}\n"
         )
 
-        result = agent.run(prompt)
-        data: ClassificationResult = result.data
+        result = await agent.run(prompt)
+        data: ClassificationResult = result.output
 
         db.store_classification(
             conn=conn,
@@ -86,6 +87,15 @@ def classify_unclassified_transcripts(settings: Settings, conn) -> int:
         classified_count += 1
 
     return classified_count
+
+
+def classify_unclassified_transcripts(settings: Settings, conn) -> int:
+    """
+    Run the classifier over any transcripts that do not have a saved classification.
+    
+    This is a synchronous wrapper around the async implementation.
+    """
+    return asyncio.run(_classify_unclassified_transcripts_async(settings, conn))
 
 
 
