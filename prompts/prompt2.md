@@ -1,0 +1,1 @@
+@zsh (84-115) there are >3.2K videos on the channel, more than the 3 displayed here. diagnose what is wrong with the @youtube_client.py or its connection, fix it and run make extract again to confirm the fix

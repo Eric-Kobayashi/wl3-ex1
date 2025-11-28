@@ -50,3 +50,4 @@ def run_basic_analysis(conn) -> None:
     print_category_distribution_by_month(conn)
 
 
+
